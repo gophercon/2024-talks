@@ -1,0 +1,449 @@
+# Chan Chan Chan T: A Generic Tale
+GopherCon 2024
+9 Jul 2024
+Summary: It started as a fragile, tightly-coupled system, poorly synchronized, impinging a single mutex, and prone to memory leaks. With a sprinkle of channels (of channels (of channels)) and a dash of type parameters, it became simple, efficient, and dependency-free: the "easy to use, hard to misuse" of legend. What can a random matchmaking system teach us about API design in an era of Go with generics?
+
+Branden J Brown
+Software Developer
+https://gitlab.com/zephyrtronium/
+https://zephyrtronium.github.io/
+
+
+## Prelude
+
+: It starts with a fragile, tightly-coupled system, poorly synchronized, impinging a single mutex, and prone to memory leaks.
+
+	package lobby
+
+	import (
+		"sync"
+
+		"github.com/google/uuid"
+
+		"git.sunturtle.xyz/studio/shotgun/game"
+		"git.sunturtle.xyz/studio/shotgun/player"
+	)
+
+	type Lobby struct {
+		mu    sync.Mutex
+		games map[GameID]*game.Game
+	}
+
+	func New() *Lobby
+
+	func (l *Lobby) Finish(id GameID)
+	func (l *Lobby) Game(id GameID) *game.Game
+	func (l *Lobby) Start(dealer, chall player.ID) GameID
+
+
+## With a sprinkle of channels
+
+: With a sprinkle of channels
+
+	type Lobby chan
+
+
+## (of channels)
+
+: of channels
+
+	type Lobby chan chan
+
+
+## (… of channels)
+
+: of channels
+
+	type Lobby chan chan chan GameID
+
+
+## and a dash of type parameters
+
+: and a dash of type parameters
+
+	type Lobby[ID, T any] chan chan chan matchMade[ID, T]
+
+
+## simple, efficient, dependency-free
+
+: it becomes simple, efficient, and dependency-free.
+
+	import "context"
+
+
+## Easy to use, hard to misuse.
+
+: The "easy to use, hard to misuse" of legend.
+
+	func New[ID, T any]() *Lobby[ID, T]
+
+	func (l *Lobby[ID, T]) Queue(ctx context.Context, id ID, p T) (id ID, chall T, deal bool)
+
+
+## A story of channels.
+
+: This is a story of channels,
+
+
+## A story of type parameters.
+
+: a story of type parameters,
+
+
+## Random matchmaking
+
+: a story of random matchmaking.
+: Let's say five players start playing our game at once. Each is represented by a goroutine handling a WebSocket connection.
+
+Players A, B, C, D, E enter.
+
+
+## Pair them, in any arrangement.
+
+: We need to produce any possible pairing of them.
+
+- (A : B), (C : D)
+- (A : B), (C : E)
+- (A : C), (B : D)
+- (A : C), (B : E)
+- (A : D), (B : C)
+- (A : D), (B : E)
+- (A : E), (B : C)
+- (A : E), (B : D)
+- (B : C), (D : E)
+- (B : D), (C : E)
+- …
+
+: The one left over waits for someone else to enter the queue.
+
+
+## Map? Queue?
+
+: We might reach for a familiar data structure, like a map or a queue.
+
+Map players to games.
+
+Use a literal queue for the queue.
+
+: This could work, but it leads us to some tricky questions.
+
+
+## Notify the waiting goroutine
+
+How do both callers learn about their match?
+
+: For a given match, how do we notify both goroutines? In principle, one of them was waiting for the other, so it seems hard to implement this without some kind of loop – which is probably of the busy variety.
+
+
+## Quit the game
+
+How do we implement cancellation?
+
+: What do we do when the waiting player closes their client? We need to implement cancellation for this, and it has to be safe with respect to another player joining concurrently.
+
+
+## Don't leak memory
+
+How do we know when to clean up the entries in the data structure?
+
+: Which side is responsible for cleaning up entries?
+
+
+## Raspberry Pi mode
+
+Will serializing with a mutex be too expensive?
+
+: Will it be ok for every operation to hit a single mutex, given that I expect many concurrent connections?
+
+
+## Act I — Communication
+
+: Exposition complete, we reach Act I of our story.
+
+
+## Channels are the key.
+
+: We want multiple goroutines to coordinate. Rather than data structures, a better approach is to view our system in terms of its communication, which is to say, use channels.
+: What do player connections, in other words goroutines, say to each other?
+
+Finding a match is communication.
+
+
+## Channels of…
+
+: That's a match request. Player A wants to provide a way for Player B to communicate with them and agree they're matched.
+
+The thing we're communicating is a match request.
+
+The other side needs to communicate back when they receive it.
+
+: So, we need a channel *of channels*.
+
+	chan chan ...something
+
+
+## And on the other side…
+
+: Both sides need to agree on an ID for their match, which means one side has to construct it and tell the other what it is – yet another communication, yet another channel. chan chan chan.
+
+B wants A to tell them the match ID.
+
+	type Lobby struct {
+		matches chan chan chan GameID
+	}
+
+
+## A random matchmaking system in 23 lines of code.
+
+	func (l *Lobby) Queue(ctx context.Context) (GameID, bool) {
+		m := make(chan chan GameID, 1)
+		select {
+		case <-ctx.Done():
+			return GameID{}, false
+		case l.matches <- m: // do nothing, wait for response
+		case m := <-l.matches:
+			ch := make(chan GameID, 1)
+			m <- ch
+			select {
+			case <-ctx.Done():
+				return GameID{}, false
+			case id := <-ch:
+				return id, false
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return GameID{}, false
+		case ch := <-m:
+			id := GameID(uuid.New())
+			ch <- id
+			return id, true
+		}
+	}
+
+: Just following the communication, we end up with a complete matchmaking system that fits on one slide, if just barely.
+: This solves almost every problem I've talked about, and then some. We get concurrency for free, since it's all based on channels. We get cancellation for free, through the usual mechanism with contexts. Both sides learn immediately about their match, including whether they are the side responsible for resources. And as a bonus, there's only one method to call to do all functionality. It'd be great if this actually did everything we need.
+
+
+## Who did we match?
+
+: As part of implementing game logic, we also want the… resource-y goroutine to know the player ID on the other side. We don't have a space to communicate that right now.
+
+We also want to know the player ID on the other side to facilitate the game logic implementation.
+
+
+## Just a bit hard to read the code.
+
+chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan select select chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan chan select chan chan chan 
+
+: You may also have noticed that it's a bit difficult to read that code; it's hard to understand why we're creating all these channels.
+
+
+## Are comments enough?
+
+	...
+	case l.matches <- m:
+		// Our match is submitted. Move on.
+	case m := <-l.matches:
+		// We might have become a dealer at the same time someone else did.
+		// We created our match, but we can try to get theirs as well and
+		// never send ours, since l.matches is unbuffered.
+		r := matchMade{
+			match: make(chan GameID, 1),
+			chall: p,
+		}
+		m <- r
+		select {
+		case <-ctx.Done():
+			return GameID{}, player.ID{}, false
+		case id := <-r.match:
+			return id, p, false
+		}
+	...
+
+: Comments help, but…
+
+
+## I'll miss you, chan chan chan ちゃん
+
+: we can define some intermediate types to have their names serve as a stronger kind of documentation.
+
+	type matchMade struct {
+		match chan GameID
+		chall player.ID
+	}
+
+	type match chan matchMade
+
+	type Lobby struct {
+		matches chan match
+	}
+
+: So, chan chan chan never actually made it into this project. I hope you liked my hook. It helped us to learn something:
+
+
+## Communication deduplicates state.
+
+: That was the main goal for me with this refactor. We already have our players represented in goroutines, so we shouldn't need to represent them in another data structure. Channels, and hence communication, turn that state into control flow.
+
+
+## Act II — Go's New Era
+
+: That was only Act I of the story. Really, this was advice you've heard before: "share memory by communicating." Act II is something new.
+
+
+## Awkward IDs.
+
+: It arises because actually using this turns out to be slightly awkward. The naïve approach leads to an import cycle.
+: There's a quick fix: we just move the existing match ID type into a shared package. But I don't want the business logic to care about how the web server identifies games, so I don't want to put the ID type in the game package. I don't really want to make a whole new package, either. There's definitely a cleaner solution.
+
+We need multiple packages to agree on a type for match IDs.
+
+Do I really want to make a whole package just for `type GameID uuid.UUID`?
+
+
+## Simplify
+
+: To get there, we need to try thinking some simpler thoughts about the code.
+
+
+## Distilling to operations
+
+: In terms of operations on types, this code is hardly doing anything.
+
+We need both sides of a match to *agree on* one thing, and we need both sides to *exchange* a different thing.
+
+The only thing we actually do with those things is send them through channels.
+
+: We need both sides of a match to agree on one thing, and we need both sides to exchange a different thing. All we do is send those things through channels. We don't care that they're match or player IDs! And in Go one eighteen, we gained a way to *express* that we don't care what we're handling.
+
+
+## Add a type parameter! One 'simple' design change, a panoply of outcomes.
+
+	type matchMade[ID, T any] struct {
+		match chan ID
+		carry T
+	}
+
+	type match[ID, T] chan matchMade[ID, T]
+
+	type Lobby[ID, T] struct {
+		matches chan match[ID, T]
+	}
+
+	func (l *Lobby[ID, T]) Queue(ctx context.Context, new func() ID, p T) (id ID, chall T, deal bool)
+
+: Add a type parameter! Or two, in this case.
+: The slide title is a reference that maybe a handful of people in the audience might recognize.
+
+
+## Application, not library
+
+: Realistically, we aren't going to reuse this anywhere else. The usual advice is that generics is best for libraries, but this is application code.
+: Apparently, I've been following Axel's advice to use generics wrong for a while now.
+
+This code is specific to the application.
+
+
+## Fixed parameters
+
+	type Server struct {
+		l *lobby.Lobby[uuid.UUID, player.ID]
+		// ...
+	}
+
+: We have type parameters, but they won't really change.
+
+
+## Except where they do.
+
+: Except where they do: say, in unit tests.
+
+The unit tests are much simpler now!
+
+Before, we had to create reproducible IDs. Now:
+
+	l := lobby.New[int, int]()
+
+: Here, type parameters give us something like dependency injection, but much cheaper in terms of lines of code.
+
+
+## Or when requirements change.
+
+	type Server struct {
+		l *lobby.Lobby[uuid.UUID, matchingPerson]
+		// ...
+	}
+
+	type matchingPerson struct {
+		sync chan struct{}
+		person
+	}
+	
+	type person struct {
+		conn *websocket.Conn
+		id   player.ID
+	}
+
+: Or when further iteration reveals that we need to adjust our requirements. Our code is parametric, so it doesn't need to change; we just adjust our types.
+: This was so easy that I forgot I even did it until I was doing my final check through my slides this morning.
+
+
+## Final API
+
+	package lobby
+
+	import "context"
+
+	type matchMade[ID, T any] struct {
+		match chan ID
+		carry T
+	}
+
+	type match[ID, T any] chan matchMade[ID, T]
+
+	type Lobby[ID, T any] struct {
+		matches chan match[ID, T]
+	}
+
+	func New[ID, T any]() *Lobby[ID, T]
+
+	func (l *Lobby[ID, T]) Queue(ctx context.Context, new func() ID, p T) (id ID, chall T, deal bool)
+
+: With type parameters, it is complete.
+
+
+## Final implementation
+
+	var zid ID
+	var zero T
+	m := make(match[ID, T], 1)
+	select {
+	case <-ctx.Done():
+		return zid, zero, false
+	case l.matches <- m: // do nothing, wait for response
+	case m := <-l.matches:
+		r := matchMade[ID, T]{match: make(chan ID, 1), carry: p}
+		m <- r
+		select {
+		case <-ctx.Done():
+			return zid, zero, false
+		case id := <-r.match:
+			return id, p, false
+		}
+	}
+	select {
+	case <-ctx.Done():
+		return zid, zero, false
+	case r := <-m:
+		id := new()
+		r.match <- id
+		return id, r.carry, false
+	}
+
+: By implementing this, we learn the theme of Act II.
+
+
+## Type parameters are more than generics.
+
+: Type parameters do more than make code generic. They also make code modular.
