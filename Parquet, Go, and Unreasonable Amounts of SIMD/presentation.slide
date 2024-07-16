@@ -1,0 +1,235 @@
+# Parquet, Go, and Unreasonable Amounts of SIMD
+9 July 2024
+Tags: parquet, go, parquet-go, simd
+Summary: This is a presentation about the github.com/parquet-go/parquet-go project.
+
+Achille Roussel
+Co-founder, dispatch.run
+achille@dispatch.run
+https://github.com/parquet-go/parquet-go
+achille-roussel (Github)
+
+: Hello, my name is Achille, I'm the co-founder of dispatch.run, and also an open-source contributor.
+: I've worked on a bunch of projects in the Go ecosystem.
+: Today I'm here to talk to you about another open-source project I maintain: parquet-go
+
+## What is Parquet?
+
+- Columnar file format
+- Per-column encoding for efficient compression
+- Popular in "big data"
+
+.image images/parquet-logo.png
+
+: Parquet is a columnar file format that's gotten really popular in the "big data" space.
+: It has a lot of the features you want for storing and querying large volumes of data.
+: Like very efficient encoding and compression, indexes, bloom filters, etc...
+
+## Why did we develop parquet-go?
+
+.link https://github.com/parquet-go/parquet-go
+
+- Project started in 2021
+- Unmaintained packages
+- Poor performance
+
+.image images/SCR-20240709-kbhm.png 400 _
+
+: Back when I was working at Segment in 2021, we had a lot of "big data" that we wanted to keep in object store and query efficiently.
+: Unfortunately all the existing open source packages for reading and writing parquet files were either unmaintained, crippled with bugs, but more importantly didn't meet our performance requirements.
+: So as one usually does, I thought to myself "how hard can it be to write a parquet library?"
+: Let me tell you, "It was really hard"
+
+## Who is using parquet-go?
+
+.link https://github.com/parquet-go/parquet-go
+
+- FrostDB (Polar Signals)
+- Grafana Tempo
+- Grafana Pyroscope
+- Redpanda Connect
+- ...
+
+.image images/GOPHER_SHARE.png 200 _
+
+: Luckily around that time, I met friends at Polar Signals and Grafana Labs who were in search of a similar solution.
+: So I open-sourced parquet-go and created a small community around the project which has grown a lot since.
+
+## How did we make parquet-go fast?
+
+.link https://github.com/parquet-go/parquet-go
+
+- API designed for high-performance
+- Unreasonnable amounts of assembly
+
+```
+$ find . -name '*.go' -and -not -name '*_test.go' | xargs wc -l | tail -1
+   34609 total
+```
+
+```
+$ find . -name '*.s' | xargs wc -l | tail -1
+    9410 total
+```
+
+```
+$ echo '100 * (9410 / 34609)' | bc -l
+27.189459389176225837
+```
+
+: So how did we make it fast?
+: Two main reasons, one lies in the design of the high-level abstractions.
+: The other is that I implemented all the data crunching code paths as vectorized algorithms in assembly.
+: When we take a look at the project today, we have over 25% of assembly code.
+
+## Crafting APIs for high-performance software
+
+- Precompute as much as possible
+- Receive input/output buffers
+- Amortize the cost of abstractions
+
+```
+type RowReader interface {
+    ReadRows(rows []Row) (int, error)
+}
+```
+
+```
+type RowWriter interface {
+    WriteRows(rows []Row) (int, error)
+}
+```
+
+: If you want to write high-performance software, the most important part to get right are your abstractions.
+: There are two core interfaces in the package which are the row reader and writer.
+: The key here is that we pass an array of rows as input or output buffer.
+: This amortizes the cost of abstractions, which means we can have high-performance code while also using high-level constructs.
+: Basically this design means that the program can spend most of its CPU time in the innermost parts of the code where it's actually doing work, instead of crossing abstraction bounaries over and over.
+
+## Run-Length / Binary Packing
+
+.link https://arxiv.org/pdf/1209.2137
+
+**Decoding billions of integers per second through vectorization**
+
+*Daniel Lemire, Leonid Boytsov*
+
+- VPSHUFD
+- VPSLLVQ
+- VBLENDPD
+
+: In parquet, there is a lot of run-length encoding and bit-packing done to represent various parts of the data.
+: We implement this paper from Daniel Lemire which describes how to do efficient bit-packing of integers.
+: One thing I learned about these research papers is that they tend to describe the high-level idea, but rarely go into the implementation details.
+: So a lot of the difficulty here was figuring out how to "finish" the work.
+: I think what I achieved in parquet-go is pretty unique, to my knowledge there aren't a lot of production-scale implementation of these algorithms.
+
+## Prefix Sum
+
+.link https://en.algorithmica.org/hpc/algorithms/prefix/
+
+- Really difficult to vectorize due to data dependencies
+- Compute and validate at the same time
+
+```
+for i := 1; i < len(values); i++ {
+    values[i] += values[i-1]
+}
+```
+
+: In multiple encodings, parquet usually stores deltas between values, because the deltas are usually small and can be packed into fewer bits.
+: There's another paper that we implemented to vectorize the encoding and decoding of deltas.
+: But in our case, the data comes from external files that may have been corrupted, we also need to do validation.
+: We improved the reference algorithm a bit tho to do both computation and validation at the same time and avoid thrashing the memory caches by doing multiple passes.
+
+## Bytestream Split
+
+.link https://drive.google.com/file/d/1wfLQyO2G5nofYFkS7pVbUW0-oJkQqBvv/view
+
+Swap bytes of 32 bit and 64 bit floats to improve the compression ratio with Zstd
+
+- VPSCATTER
+- VPGATHER
+- VPSHUFB
+- VPERMB
+
+: This is another weird trick. If you have a column of floating point numbers, instead of storing them as a plain array, store all the first bytes first, then all the second bytes, all the third bytes, etc...
+: Then compress it, you get much better compression ratios.
+: This is an encoding called bytestream split in parquet, and it's also a perfect use case for GATHER/SCATTER instructions, because they let us operate on non-contiguous areas of memory.
+: Take one float value, and you can scatter each of its bytes at the right position in the output buffer with a single instruction.
+: This encoding ends up being as fast as a simple memory copy.
+
+## Bloom Filters
+
+AVX2 implementation of split block filters:
+
+```
+name              old time/op    new time/op     delta
+FilterInsertBulk    45.1ns ± 2%    17.8ns ± 3%   -60.41%  (p=0.000 n=10+10)
+FilterInsert        3.48ns ± 2%     2.55ns ± 1%  -26.86%  (p=0.000 n=10+8)
+FilterCheck         3.64ns ± 3%     2.66ns ± 2%  -26.82%  (p=0.000 n=10+9)
+
+name              old speed      new speed       delta
+FilterInsertBulk  11.4GB/s ± 2%  28.7GB/s ± 3%  +152.61%  (p=0.000 n=10+10)
+FilterInsert      9.19GB/s ± 2%  12.56GB/s ± 1%  +36.71%  (p=0.000 n=10+8)
+FilterCheck       8.80GB/s ± 3%  12.03GB/s ± 2%  +36.61%  (p=0.000 n=10+9)
+```
+
+: Finally getting into some of the most advanced and unique parts of parquet-go.
+: The split-block bloom filters of the parquet spec map extremely well to parallel processing using AVX2, so obviously I had to vectorize all of that as well.
+: As you see parquet-go can generate bloom filters at almost 30GB/s.
+
+## Parallel xxhash with AVX-512
+
+Parallel computation of xxhash when inserting multiple values to filters
+
+```
+name                   old speed      new speed       delta
+MultiSum64Uint8/4KB    4.97GB/s ± 0%  14.59GB/s ± 1%  +193.73%  (p=0.000 n=10+10)
+MultiSum64Uint16/4KB   3.55GB/s ± 0%   9.46GB/s ± 0%  +166.20%  (p=0.000 n=10+9)
+MultiSum64Uint32/4KB   4.48GB/s ± 0%  13.93GB/s ± 1%  +210.93%  (p=0.000 n=10+10)
+MultiSum64Uint64/4KB   3.57GB/s ± 0%  11.12GB/s ± 1%  +211.73%  (p=0.000 n=9+10)
+MultiSum64Uint128/4KB  2.54GB/s ± 0%   6.49GB/s ± 1%  +155.69%  (p=0.000 n=10+10)
+
+name                   old hash/s     new hash/s      delta
+MultiSum64Uint8/4KB        621M ± 0%      1823M ± 1%  +193.73%  (p=0.000 n=10+10)
+MultiSum64Uint16/4KB       444M ± 0%      1182M ± 0%  +166.20%  (p=0.000 n=10+9)
+MultiSum64Uint32/4KB       560M ± 0%      1742M ± 1%  +210.93%  (p=0.000 n=10+10)
+MultiSum64Uint64/4KB       446M ± 0%      1391M ± 1%  +211.73%  (p=0.000 n=9+10)
+MultiSum64Uint128/4KB      317M ± 0%       811M ± 1%  +155.69%  (p=0.000 n=10+10)
+```
+
+: Values inserted in bloom filters must be hashed first, so the hashing algorithm can become a bottleneck in the generation of bloom filters.
+: We implemented a vectorized version of xxhash which computes multiple hashes in parallel and can hash 1 to 2 billion values per second.
+
+## Contribute back to Go
+
+- bytes.Count implemented with AVX-512
+
+```
+                │    base     │               avx512                │
+                │   sec/op    │   sec/op     vs base                │
+CountSingle/10    4.832n ± 0%   4.858n ± 1%   +0.55% (p=0.000 n=10)
+CountSingle/32    5.477n ± 1%   5.966n ± 1%   +8.93% (p=0.000 n=10)
+CountSingle/4K    63.35n ± 1%   39.92n ± 0%  -36.98% (p=0.000 n=10)
+CountSingle/4M    124.8µ ± 5%   121.9µ ± 3%        ~ (p=0.123 n=10)
+CountSingle/64M   4.706m ± 3%   4.348m ± 2%   -7.61% (p=0.000 n=10)
+geomean           996.9n        906.8n        -9.03%
+
+                │     base     │                avx512                │
+                │     B/s      │     B/s       vs base                │
+CountSingle/10    1.928Gi ± 0%   1.917Gi ± 1%   -0.55% (p=0.000 n=10)
+CountSingle/32    5.441Gi ± 1%   4.995Gi ± 0%   -8.20% (p=0.000 n=10)
+CountSingle/4K    60.21Gi ± 1%   95.54Gi ± 0%  +58.68% (p=0.000 n=10)
+CountSingle/4M    31.30Gi ± 5%   32.05Gi ± 3%        ~ (p=0.123 n=10)
+CountSingle/64M   13.28Gi ± 3%   14.37Gi ± 2%   +8.23% (p=0.000 n=10)
+geomean           12.13Gi        13.33Gi        +9.93%
+```
+
+.link https://go-review.googlesource.com/c/go/+/542695
+
+: This was just an overview, there are many more optimizations that we've implemented in the package, and some that can also be ported back to Go so the rest of the ecosystem benefits from it.
+: In particular, I have this CL open to add an AVX-512 implementation of bytes.Count which yields singificant throughput improvements, so please someone merge it!
+: Remember to write high-performance software, the most important part is to get your high-level abstractions right.
+: Alright, that's all I had, thanks for listening and don't forget to support your open-source maintainers by being generous with github stars!
+
