@@ -13,6 +13,7 @@ Slides and Links for 2024 GopherCon talks sorted alphabetically.
 - Riley Thompson - [Exploring the Go Compiler - Adding a "four" loop](./RileyThompson-ExploringTheGoCompiler-AddingAFourLoop/README.md)
 - Sadie Freeman - [Prototyping A Go, GraphQL, gRPC Microservice](./SadieFreeman-PrototypingAGoGraphQLgRPCMicroservice/README.md)
 - Yun Hao Zhang - [Building a High-Performance Concurrent Map in Go](./YunHaoZhang-BuildingaHighPerformanceConcurrentMapInGo/YunHao%20Zhang%20-%20Building%20a%20High-Performance%20Concurrent%20Map%20in%20Go.pdf)
+- Cassie Coyle - [Standardizing Errors in Go: A Practice Guide With Dapr](./CassieCoyle-StandardizingErrorsInGo-APracticalGuideWithDapr/README.md)
 
 ## Lightning Talks
 
@@ -26,3 +27,4 @@ Slides and Links for 2024 GopherCon talks sorted alphabetically.
 - Matthew Sanabria - [Build It! With or Without Tools](./MatthewSanabria-BuildIt-WithOrWithoutTools/README.md)
 - Robin Hallabro-Kokko - [Lightning Fast Database Tests](./RobinHallabroKokko-LightningFastDatabaseTests/README.md)
 - Siva Manivannan - [You Can Store That In a Container Registry?!](./SivaManivannan-YouCanStoreThatInAContainerRegistry/README.md)
+- Wilken Rivera - [Embracing the Replace](./WilkenRivera-Embracing-The-Replace/README.md)
