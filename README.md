@@ -7,6 +7,7 @@ Slides and Links for 2024 GopherCon talks sorted alphabetically.
 - Axel Wagner - [Advanced Generics Patterns](./AxelWagner-AdvancedGenericsPatterns/README.md)
 - Daniela Petruzalek - [Who Tests the Tests?](./DanielaPetruzalek/README.md)
 - Donia Chaiehloudj - [Build a Glamorous Habit Tracker using Charm CLI](./DoniaChaiehloudj-BuildAGlamourousHabitTrackerWithCharmCLI/README.md)
+- Ellen Gao - [Building a Self-Regulating Pressure Relief Mechanism](./EllenGao-BuildingASelfRegulatingPressureReliefMechanism/README.md)
 - Holly Casaletto - [Advanced Code Instrumentation Techniques for High-Performance Trading Systems](./HollyCasaletto-AdvancedCodeInstrumentationTechniquesForHighPerformanceTradingSystems/README.md)
 - Keith Randall - [Interface Internals](./KeithRandall-InterfaceInternals/README.md)
 - Patricio Whittingslow - [Go in the Smallest of Places](./PatricioWhittingslow-GoInTheSmallestOfPlaces/README.md)
