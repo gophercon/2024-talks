@@ -5,15 +5,16 @@ Slides and Links for 2024 GopherCon talks sorted alphabetically.
 ## Main Stage
 
 - Axel Wagner - [Advanced Generics Patterns](./AxelWagner-AdvancedGenericsPatterns/README.md)
+- Cassie Coyle - [Standardizing Errors in Go: A Practice Guide With Dapr](./CassieCoyle-StandardizingErrorsInGo-APracticalGuideWithDapr/README.md)
 - Daniela Petruzalek - [Who Tests the Tests?](./DanielaPetruzalek/README.md)
 - Donia Chaiehloudj - [Build a Glamorous Habit Tracker using Charm CLI](./DoniaChaiehloudj-BuildAGlamourousHabitTrackerWithCharmCLI/README.md)
 - Holly Casaletto - [Advanced Code Instrumentation Techniques for High-Performance Trading Systems](./HollyCasaletto-AdvancedCodeInstrumentationTechniquesForHighPerformanceTradingSystems/README.md)
 - Keith Randall - [Interface Internals](./KeithRandall-InterfaceInternals/README.md)
 - Patricio Whittingslow - [Go in the Smallest of Places](./PatricioWhittingslow-GoInTheSmallestOfPlaces/README.md)
+- Patrick Stephen - [Digital Audio From Scratch](./PatrickStephen-DigitalAudioFromScratch/README.md)
 - Riley Thompson - [Exploring the Go Compiler - Adding a "four" loop](./RileyThompson-ExploringTheGoCompiler-AddingAFourLoop/README.md)
 - Sadie Freeman - [Prototyping A Go, GraphQL, gRPC Microservice](./SadieFreeman-PrototypingAGoGraphQLgRPCMicroservice/README.md)
 - Yun Hao Zhang - [Building a High-Performance Concurrent Map in Go](./YunHaoZhang-BuildingaHighPerformanceConcurrentMapInGo/YunHao%20Zhang%20-%20Building%20a%20High-Performance%20Concurrent%20Map%20in%20Go.pdf)
-- Cassie Coyle - [Standardizing Errors in Go: A Practice Guide With Dapr](./CassieCoyle-StandardizingErrorsInGo-APracticalGuideWithDapr/README.md)
 
 ## Lightning Talks
 
