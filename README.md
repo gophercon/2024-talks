@@ -11,6 +11,7 @@ Slides and Links for 2024 GopherCon talks sorted alphabetically.
 - Ellen Gao - [Building a Self-Regulating Pressure Relief Mechanism](./EllenGao-BuildingASelfRegulatingPressureReliefMechanism/README.md)
 - Holly Casaletto - [Advanced Code Instrumentation Techniques for High-Performance Trading Systems](./HollyCasaletto-AdvancedCodeInstrumentationTechniquesForHighPerformanceTradingSystems/README.md)
 - Keith Randall - [Interface Internals](./KeithRandall-InterfaceInternals/README.md)
+- Marvin Hosea - [Saving African Savannah Wildlife with Go-MQTT](./MarvinHosea-SavingAfricanSavannahWildlifeWithGoMQTT/README.md)
 - Patricio Whittingslow - [Go in the Smallest of Places](./PatricioWhittingslow-GoInTheSmallestOfPlaces/README.md)
 - Patrick Stephen - [Digital Audio From Scratch](./PatrickStephen-DigitalAudioFromScratch/README.md)
 - Riley Thompson - [Exploring the Go Compiler - Adding a "four" loop](./RileyThompson-ExploringTheGoCompiler-AddingAFourLoop/README.md)
