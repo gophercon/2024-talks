@@ -1,6 +1,6 @@
 # GopherCon 2024 Talks
 
-Slides and Links for 2024 GopherCon talks sorted alphabetically.
+Slides and Links for 2024 GopherCon talks sorted alphabetically by the speakers' given name.
 
 ## Main Stage
 
@@ -15,6 +15,7 @@ Slides and Links for 2024 GopherCon talks sorted alphabetically.
 - Patricio Whittingslow - [Go in the Smallest of Places](./PatricioWhittingslow-GoInTheSmallestOfPlaces/README.md)
 - Patrick Stephen - [Digital Audio From Scratch](./PatrickStephen-DigitalAudioFromScratch/README.md)
 - Riley Thompson - [Exploring the Go Compiler - Adding a "four" loop](./RileyThompson-ExploringTheGoCompiler-AddingAFourLoop/README.md)
+- Ron Evans - [Go Back to the Future](./RonEvans-GoBackToTheFuture/README.md)
 - Sadie Freeman - [Prototyping A Go, GraphQL, gRPC Microservice](./SadieFreeman-PrototypingAGoGraphQLgRPCMicroservice/README.md)
 - Yun Hao Zhang - [Building a High-Performance Concurrent Map in Go](./YunHaoZhang-BuildingaHighPerformanceConcurrentMapInGo/YunHao%20Zhang%20-%20Building%20a%20High-Performance%20Concurrent%20Map%20in%20Go.pdf)
 
