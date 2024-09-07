@@ -4,6 +4,7 @@ Slides and Links for 2024 GopherCon talks sorted alphabetically by the speakers'
 
 ## Main Stage
 
+- Alan Braithwaite - [Processing Millions of Events Per Second Reliably Using Generics](AlanBraithwaite-ProcessingMillionsOfEventsPerSecondReliablyUsingGenerics/README.md)
 - Axel Wagner - [Advanced Generics Patterns](./AxelWagner-AdvancedGenericsPatterns/README.md)
 - Cassie Coyle - [Standardizing Errors in Go: A Practice Guide With Dapr](./CassieCoyle-StandardizingErrorsInGo-APracticalGuideWithDapr/README.md)
 - Daniela Petruzalek - [Who Tests the Tests?](./DanielaPetruzalek-WhoTestsTheTests/README.md)
